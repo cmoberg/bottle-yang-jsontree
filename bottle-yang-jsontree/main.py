@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys, cgi, argparse
+import argparse
 import optparse
 import logging
 
@@ -55,71 +55,68 @@ def get_plugin_by_name(name):
     return False
 
 class Writer(object):
-	def __repr__(self):
-		return self.retval
-	def write(self, string):
-		self.retval = string
+    def __repr__(self):
+        return self.retval
+    def write(self, string):
+        self.retval = string
 
 @route('/')
 def validator():
-	return template('main')
+    return template('main')
 
 @route('/transform', method="POST")
 def transform_module():
-	module = request.body.read()
+    module = request.body.read()
 
-	logging.info("Content-type is:", request.content_type)
+    response.content_type = 'application/json'
 
-	response.content_type = 'application/json'
+    repos = pyang.FileRepository()
+    ctx = pyang.Context(repos)
+    modules = []
+    modules.append(ctx.add_module("upload module", module))
 
-	repos = pyang.FileRepository()
-	ctx = pyang.Context(repos)
+    plugin.init()
+    p = get_plugin_by_name('jsontree')
 
-	modules = []
-	modules.append(ctx.add_module("upload module", module))
+    op = optparse.OptionParser()
+    p.add_opts(op)
+    (o, args) = op.parse_args()
+    ctx.opts = o
 
-	plugin.init()
-	p = get_plugin_by_name('jsontree')
+    wr = Writer()
+    try:
+        p.emit(ctx, modules, wr)
+    except:
+        bottle.abort(500, 'Internal Server Error')
 
-	op = optparse.OptionParser()
-	p.add_opts(op)
-	(o, args) = op.parse_args()
-	ctx.opts = o
-
-	wr = Writer()
-	try:
-		p.emit(ctx, modules, wr)
-	except:
-		bottle.abort(500, 'Internal Server Error')
-
-	return str(wr)
+    return str(wr)
 
 @route('/static/:path#.+#', name='static')
 def static(path):
-	return static_file(path, root='static')
+    return static_file(path, root='static')
 
 @route('/about')
 def about():
-	return(template('about'))
+    return template('about')
 
 @error(404)
 def error404(error):
-	return 'Nothing here, sorry.'
+    return 'Nothing here, sorry.'
 
 if __name__ == '__main__':
-	port = 8080
+    port = 8080
 
-	parser = argparse.ArgumentParser(description='A YANG to JSON tree transformer.')
-	parser.add_argument('-p', '--port', dest='port', type=int, help='Port to listen to (default is 8080)')
-	parser.add_argument('-d', '--debug', help='Turn on debugging output', action="store_true")
-	args = parser.parse_args()
+    parser = argparse.ArgumentParser(description='A YANG to JSON tree transformer.')
+    parser.add_argument('-p', '--port', dest='port', type=int, help='Port to listen to (default is 8080)')
+    parser.add_argument('-d', '--debug', help='Turn on debugging output', action="store_true")
+    args = parser.parse_args()
 
-	if args.port:
-		port = args.port
+    if args.port:
+        port = args.port
 
-	if args.debug:
-		debug = True
+    if args.debug:
+        debug = True
 
-	install(log_to_logger)
+    install(log_to_logger)
 
-	run(server='cherrypy', host='0.0.0.0', port=port)
+    run(server='cherrypy', host='0.0.0.0', port=port)
